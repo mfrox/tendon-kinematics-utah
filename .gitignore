@@ -1,0 +1,6 @@
+*.swp
+*.swo
+/papers
+/build*/
+data/
+CMakeLists.txt.user
