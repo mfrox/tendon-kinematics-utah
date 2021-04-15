@@ -15,11 +15,22 @@ find_package(ament_cmake REQUIRED)
 find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(Boost REQUIRED COMPONENTS system filesystem)
 find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
+#find_package(visualization_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 
 find_package(PythonInterp 3)
 find_package(PythonLibs 3)
 find_package(pybind11)
 
+# Qt stuff
+if (CMAKE_VERSION VERSION_LESS "3.7.0")
+  set(CMAKE_INCLUDE_CURRENT_DIR ON)
+endif()
+set(CMAKE_AUTOMOC ON)
+#set(CMAKE_AUTORCC ON)
+#set(CMAKE_AUTOUIC ON)
+find_package(Qt5 COMPONENTS Core Gui REQUIRED)
 
 
 option (USE_OPENMP "Use OpenMP" ON)
@@ -91,6 +102,15 @@ set(TENDON_HEADERS
 install(FILES ${TENDON_HEADERS} DESTINATION include/tendon)
 list(APPEND LIBTENDON_ALL_HEADERS ${TENDON_HEADERS})
 
+# haptic
+set(HAPTIC_HEADERS
+  ${SRC_DIR}/haptic/HapticQSubscriber.h
+  ${SRC_DIR}/haptic/StreamingTransformer.h
+  ${SRC_DIR}/haptic/HapticTransform.h
+  )
+install(FILES ${HAPTIC_HEADERS} DESTINATION include/haptic)
+list(APPEND LIBTENDON_ALL_HEADERS ${HAPTIC_HEADERS})
+
 
 ####################
 #    libtendon     #
@@ -98,6 +118,8 @@ list(APPEND LIBTENDON_ALL_HEADERS ${TENDON_HEADERS})
 
 add_library(tendon SHARED
   ${SRC_DIR}/csv/Csv.cpp
+  ${SRC_DIR}/haptic/HapticQSubscriber.cpp
+  ${SRC_DIR}/haptic/HapticQSubscriber.cpp
   ${SRC_DIR}/tendon/BackboneSpecs.cpp
   ${SRC_DIR}/tendon/TendonResult.cpp
   ${SRC_DIR}/tendon/TendonRobot.cpp
@@ -117,11 +139,15 @@ target_include_directories(tendon PUBLIC ${SRC_DIR})
 ament_target_dependencies(tendon
   Eigen3
   rclcpp
+  std_msgs
+  geometry_msgs
   )
 target_link_libraries(tendon
   Boost::filesystem
   Boost::system
   Eigen3::Eigen
+  Qt5::Core
+  Qt5::Gui
   levmar
   )
 target_compile_definitions(tendon PUBLIC CPPTOML_USE_MAP)
@@ -160,6 +186,12 @@ add_executable(control_app ${APP_SRC_DIR}/control_app.cpp)
 set_property(TARGET control_app PROPERTY CXX_STANDARD 17)
 target_link_libraries(control_app tendon)
 install(TARGETS control_app DESTINATION lib/${PROJECT_NAME})
+
+# haptic subscriber example
+add_executable(haptic_subscriber_example ${APP_SRC_DIR}/haptic_subscriber_example.cpp)
+set_property(TARGET haptic_subscriber_example PROPERTY CXX_STANDARD 17)
+target_link_libraries(haptic_subscriber_example tendon libros2qt)
+install(TARGETS haptic_subscriber_example DESTINATION lib/${PROJECT_NAME})
 
 
 #######################
