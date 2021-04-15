@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(tendon_experiments LANGUAGES CXX)
+project(tendon-kinematics-export LANGUAGES CXX)
 
 set(CMAKE_BUILD_TYPE ${CMAKE_BUILD_TYPE} CACHE STRING
   "Build type choices: Debug Release RelWithDebInfo"
@@ -11,8 +11,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(ament_cmake REQUIRED)
 find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(Boost REQUIRED COMPONENTS system filesystem)
+find_package(rclcpp REQUIRED)
 
 find_package(PythonInterp 3)
 find_package(PythonLibs 3)
@@ -39,6 +41,8 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -ffast-math")
 
 set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
+set(THIRD_PARTY_DIR ${SRC_DIR}/3rdparty)
+
 
 # util
 set(UTIL_HEADERS
@@ -57,6 +61,14 @@ list(APPEND LIBTENDON_ALL_HEADERS ${CLIPARSER_HEADERS})
 set(CSV_HEADERS ${SRC_DIR}/csv/Csv.h)
 install(FILES ${CSV_HEADERS} DESTINATION include/csv)
 list(APPEND LIBTENDON_ALL_HEADERS ${CSV_HEADERS})
+
+# tip-controller
+set(TIP_CONTROL_HEADERS
+    ${SRC_DIR}/tip-control/tip_control.h
+    ${SRC_DIR}/tip-control/Controller.h
+    )
+install(FILES ${TIP_CONTROL_HEADERS} DESTINATION include/tip-control)
+list(APPEND LIBTENDON_ALL_HEADERS ${TIP_CONTROL_HEADERS})
 
 # cpptoml
 set(CPPTOML_HEADERS
@@ -93,6 +105,7 @@ add_library(tendon SHARED
   ${SRC_DIR}/tendon/get_r_info.cpp
   ${SRC_DIR}/tendon/solve_initial_bending.cpp
   ${SRC_DIR}/tendon/tendon_deriv.cpp
+  ${SRC_DIR}/tip-control/Controller.cpp
   ${LIBTENDON_ALL_HEADERS}
   )
 target_include_directories(tendon PUBLIC
@@ -101,14 +114,22 @@ target_include_directories(tendon PUBLIC
   )
 set_property(TARGET tendon PROPERTY CXX_STANDARD 17)
 target_include_directories(tendon PUBLIC ${SRC_DIR})
+ament_target_dependencies(tendon
+  Eigen3
+  rclcpp
+  )
 target_link_libraries(tendon
   Boost::filesystem
   Boost::system
   Eigen3::Eigen
+  levmar
   )
 target_compile_definitions(tendon PUBLIC CPPTOML_USE_MAP)
 install(TARGETS tendon DESTINATION lib/${PROJECT_NAME})
 
+
+add_subdirectory(${THIRD_PARTY_DIR}/levmar-2.6 3rdparty/levmar-2.6)
+add_subdirectory(${THIRD_PARTY_DIR}/libros2qt  3rdparty/libros2qt )
 
 ####################
 #   applications   #
@@ -134,6 +155,12 @@ set_property(TARGET estimate_length_limits PROPERTY CXX_STANDARD 17)
 target_link_libraries(estimate_length_limits tendon)
 install(TARGETS estimate_length_limits DESTINATION lib/${PROJECT_NAME})
 
+# control app: example of how to use the tip controller
+add_executable(control_app ${APP_SRC_DIR}/control_app.cpp)
+set_property(TARGET control_app PROPERTY CXX_STANDARD 17)
+target_link_libraries(control_app tendon)
+install(TARGETS control_app DESTINATION lib/${PROJECT_NAME})
+
 
 #######################
 #   python bindings   #
@@ -143,6 +170,10 @@ if (${pybind11_FOUND})
   set(PYTHON_BINDINGS_SRC_DIR ${SRC_DIR}/python-bindings)
   pybind11_add_module(cpptendon
     ${PYTHON_BINDINGS_SRC_DIR}/module_cpptendon.cpp
+    ${PYTHON_BINDINGS_SRC_DIR}/submodule_controller.cpp
+    ${PYTHON_BINDINGS_SRC_DIR}/submodule_controller.h
+    ${PYTHON_BINDINGS_SRC_DIR}/submodule_tendon.cpp
+    ${PYTHON_BINDINGS_SRC_DIR}/submodule_tendon.h
     )
   target_link_libraries(cpptendon PUBLIC tendon)
   set_property(TARGET cpptendon PROPERTY CXX_STANDARD 17)
@@ -180,3 +211,5 @@ if(BUILD_TESTING)
     )
   gtest_discover_tests(all_tests)
 endif()
+
+ament_package()
