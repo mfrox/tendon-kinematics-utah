@@ -16,7 +16,7 @@ find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(Boost REQUIRED COMPONENTS system filesystem)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
-#find_package(visualization_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 
 find_package(PythonInterp 3)
@@ -111,6 +111,19 @@ set(HAPTIC_HEADERS
 install(FILES ${HAPTIC_HEADERS} DESTINATION include/haptic)
 list(APPEND LIBTENDON_ALL_HEADERS ${HAPTIC_HEADERS})
 
+# vistendon
+set(VISTENDON_HEADERS
+  ${SRC_DIR}/vistendon/ManualRvizMarkerArrayPublisher.h
+  ${SRC_DIR}/vistendon/RvizMarkerArrayPublisher.h
+  ${SRC_DIR}/vistendon/StreamingRvizTipPublisher.h
+  ${SRC_DIR}/vistendon/TendonBackboneRvizPublisher.h
+  ${SRC_DIR}/vistendon/TendonRvizPublisher.h
+  ${SRC_DIR}/vistendon/marker_array_conversions.h
+  ${SRC_DIR}/vistendon/shapes.h
+  )
+install(FILES ${VISTENDON_HEADERS} DESTINATION include/vistendon)
+list(APPEND LIBTENDON_ALL_HEADERS ${VISTENDON_HEADERS})
+
 
 ####################
 #    libtendon     #
@@ -141,6 +154,7 @@ ament_target_dependencies(tendon
   rclcpp
   std_msgs
   geometry_msgs
+  visualization_msgs
   )
 target_link_libraries(tendon
   Boost::filesystem
@@ -192,6 +206,12 @@ add_executable(haptic_subscriber_example ${APP_SRC_DIR}/haptic_subscriber_exampl
 set_property(TARGET haptic_subscriber_example PROPERTY CXX_STANDARD 17)
 target_link_libraries(haptic_subscriber_example tendon libros2qt)
 install(TARGETS haptic_subscriber_example DESTINATION lib/${PROJECT_NAME})
+
+# view tendon example
+add_executable(view_tendon ${APP_SRC_DIR}/view_tendon.cpp)
+set_property(TARGET view_tendon PROPERTY CXX_STANDARD 17)
+target_link_libraries(view_tendon tendon)
+install(TARGETS view_tendon DESTINATION lib/${PROJECT_NAME})
 
 
 #######################
