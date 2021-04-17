@@ -34,7 +34,21 @@ represents.
 The C++ code is found in the `src` directory.  It is broken down below and
 explained.
 
-`tendon/`: the robot specification and tendon forward kinematic modeling code.  The notable functionality is:
+
+### 3rdparty
+
+A selection of 3rd-party libraries used in the code base.
+
+- `levmar`: a Levenberg-Marquardt optimization library (i.e., damped least
+  squares) written in C.
+- `libros2qt`: provides the `QtExecutor` class (in the `qt_executor.h` header
+  file) that allows ROS2 and Qt to coexist despite each having their own event
+  loop.
+
+### tendon
+
+The robot specification and tendon forward kinematic modeling code.  The
+notable functionality is:
 
 - `tendon::TendonRobot` class: this is the main class describing a
   tendon-driven robot.  Each tendon is a `tendon::TendonSpecs` object, and the backbone
@@ -103,8 +117,11 @@ explained.
   The five fields are described in detail in the header file
   `tendon/TendonResult.h`.
 
-`apps`: Some example command-line applications to be useful and to show how to
-use this library.
+
+### apps
+
+Some example command-line applications to be useful and to show how to use this
+library.
 
 - `tendon_shape_example`: Example of how to hard-code a robot specification and
   perform a shape computation.  Provides timing of running a 3-tendon robot
@@ -116,28 +133,98 @@ use this library.
 - `estimate_tension_limits`: Loading from a robot toml specification file,
   sample configurations and estimate tension limits associated with the length
   limits found in that file.  Print the estimates to the console.
+- `control_app`: example app for running the tip controller, like inverse
+  kinematics.
+- `haptic_subscriber_example`: simple example that listens to the haptic
+  messages from ROS and prints them to the console.
+- `examples/plan_with_haptic`: example application used for Michael's research.
+  It won't compile because it involves motion planning.  It is a more complete
+  example of taking haptic input and performing motion planning within an
+  anatomical environment with a tendon-driven robot.
+- `view_tendon`: simple example of how to view the tendon robot in RViz.  Uses
+  a hard-coded tendon shape.
 
-`cliparser`: Command-line parser.  It only has one class called `CliParser`.
+### tip-control
+
+The robot controller library for controlling based on the robot's tip position.
+The main class is the `Controller` class.
+
+- `Controller`: a robot controller.  The constructor takes in a
+  `tendon::TendonRobot` object.
+  - method `robot()`: returns the used `tendon::TendonRobot` object
+  - method `set_robot()`: change the robot that is used by the controller
+  - method `inverse_kinematics()`: using the `levmar` library, perform inverse
+    kinematics from a starting configuration and a desired tip position.  Note:
+    the safety checks in `levmar` have been disabled so that this method can
+    try to find a solution even if the system is redundant.
+  - method `control()`: same functionality as `inverse_kinematics()`, but with
+    a damped-least squared implementation we created.  It is slower than
+    `inverse_kinematics()`, so it is kept around for educational purposes at
+    this point.
+
+
+### haptic
+
+Provides classes for communicating with ROS messages from a haptic device.
+
+- `haptic::HapticQSubscriber`: constructor takes a ROS2 node.  This class
+  subscribes to some messages expected to be coming from a haptic device and
+  converts them into Qt signals.  The ROS2 topics are `"/phantom/pose"` (a
+  pose), `"/phantom/button_grey"` (a boolean), and `"/phantom/button_white"`(a
+  boolean).
+  - signal `new_pose(QVector3d, QQuaternion)`: emits the new pose when one is
+    received from ROS2.
+  - signal `grey_button_pressed()`: sent when the grey button changes state
+    from not pressed to pressed.
+  - signal `grey_button_released()`: sent when the grey button changes state
+    from pressed to not pressed.
+  - signal `grey_button_toggled(bool)`: send when the grety button state
+    changes with the value being the current button value
+  - signal `white_button_*()`: same as grey button functions
+- `haptic::HapticTransform`: fields are `translation` and `scale`.  It has one
+  method called `to_transform()` which creates a `QMatrix4x4` to be used by
+  `StreamingTransformer`
+- `haptic::StreamingTransformer`: takes a transform (like from
+  `haptic::HapticTransform`) and is able to then apply that transform on a
+  position in space.  It's like a filter of vectors, taking one vector (in a
+  slot), then emitting the resulting vector after transformation as a signal.
+  - method `transform(QVector3d)`: apply the transform to this vector in 3D
+    space.
+  - slot `streaming_transform()`: apply the transform to the given vector, then
+    emit the `transformed()` signal.
+  - signal `transformed()`: emits the transformed signal, which is the result
+    of applying the transform to the input point from `streaming_transform()`.
+
+
+### vistendon
+
+This library provides utilities for publishing robot and tendon shapes to RViz2
+for visualization.
+
+- `vistendon::RvizMarkerArrayPublisher`: base class for all of the marker array
+  publisher classes.  Regularly publishes the current marker to RViz.  The
+  `publish()` method can be called explicitly.  Even so, every two seconds, it
+  publishes whether or not anything has changed.
+  - method `set_color()`: set the color of the robot in the visualization
+- `vistendon
+
+
+### cliparser
+
+Command-line parser.  It only has one class called `CliParser`.
 Look at the example apps to see examples of how it is used.  You are welcome to
 use it if you'd like.  It is bundled here simply to allow you to compile the
 provided command-line apps.
 
-`cpptoml`: Functionality for saving to and loading from toml configuration
+
+### cpptoml
+
+Functionality for saving to and loading from toml configuration
 files (see https://github.com/toml-lang/toml).  The `cpptoml/cpptoml.h` file is
 a 3rd-party library imported into this code base (and minimally modified).  The
 `cpptoml/toml_conversions.h` is a file with some convenience functions that we
 wrote.  Of note are the following functions
 
-  - method `to_toml()` and `from_toml()`: ways to save and load configuration
-    files with all of the details of the `tendon::TendonRobot`.  You usually
-    don't use these directly.  Instead, it is easier to use convenience
-    functions from `cpptoml/toml_conversions.h` like `cpptoml::to_file()` and
-    `cpptoml::from_file()`.  For example, to load a `tendon::TendonRobot` to an
-    object named `robot`, you would call `auto robot =
-    cpptoml::from_file<tendon::TendonRobot>(filename)`, and to save the `robot`
-    object to a file, you would call `cpptoml::to_file(robot, filename)`.  This
-    functionality is available for all classes that implement `to_toml()` and
-    `from_toml()`.
 - `cpptoml::to_file()`: given an object (that has an implemented `to_toml()`
   method) and a filename, write the object to that file, overwriting existing
   content if the file already exists.
@@ -149,7 +236,9 @@ wrote.  Of note are the following functions
   (like the console or an open file).
 - `cpptoml::to_string()`: convert a toml object to a `std::string`.
 
-`csv`: classes for reading from and writing to CSV files (comma-separated
+### csv
+
+Classes for reading from and writing to CSV files (comma-separated
 format).  All classes are declared inside of the `csv/Csv.h` header file.
 
 - `csv::CsvReader`: Takes in a C++ input stream `std::istream`, assumes there
@@ -219,7 +308,10 @@ int main() {
 }
 ```
 
-`util`: a directory of miscelaneous utilities.
+
+### util
+
+A directory of miscelaneous utilities.
 
 - `openfile_check.h`: only provides the `util::openfile_check()` convenience
   function.
